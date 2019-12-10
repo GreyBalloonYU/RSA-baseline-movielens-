@@ -4,8 +4,6 @@ from popular import Popular
 from svdplus import Svdplus
 from metric import hitK, ndcgK
 
-#很有意思的点在于，训练集的电影得分平均数为3.53，而测试集的电影得分平均数为3.38，这导致某些根据预测评分高低来推荐的算法(像是svd++)效果并不是很好
-
 #将数据集(u.data)根据时间序列重新划分训练集和测试集
 #dataset = pd.read_csv('./ml-100k/u.data', names=['userid','itemid','rating','timestamp'], delimiter='\t')
 #trainset = dataset.groupby('userid').apply(lambda x: x.sort_values('timestamp').iloc[:-1]).reset_index(drop=True)
@@ -16,6 +14,8 @@ from metric import hitK, ndcgK
 movies_info = pd.read_csv('./ml-100k/u.info', header=None, delimiter=' ')
 movies_scores = pd.read_csv('traindata.csv', int, delimiter=',') #读取数据集，得到一个电影评分的dataframe
 testdata = pd.read_csv('testdata.csv', int, delimiter=',').values[:,1].reshape(movies_info.iat[0,0], 1) #读入测试集
+#movies_feature = pd.read_csv('./ml-100k/itemutf8.txt', delimiter='|')
+#print(movies_feature.head())
 
 #explicit_popular = Popular(movies_info.iat[1,0], movies_info.iat[0,0], 5, True) #初始化一个基于流行度推荐的模型(explicit feedback)，K设为5
 #topK_for_users = explicit_popular.fit(movies_scores.values[:,1:3])    #所有用户各自的topK推荐列表
