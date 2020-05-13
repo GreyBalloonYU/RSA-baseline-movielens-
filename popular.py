@@ -7,7 +7,7 @@ class Popular:
     __K = 0 # top-K推荐
     __is_explicit = False #是否利用显式反馈(关注rating具体数值)，是---True，否---False
     def __init__(self, movienums, usernums, K, is_explicit):
-        self.__total_scores = np.zeros((movienums+1, ))
+        self.__total_scores = np.zeros((movienums, ))
         self.__K = K
         self.__most_popular_movie = np.empty((K, ))
         self.__topK = np.empty((usernums, K))
@@ -16,11 +16,12 @@ class Popular:
         if self.__is_explicit:
             #explicit feedback: 根据训练集求出所有电影的评分之和
             for i in range(X.shape[0]):
-                self.__total_scores[X[i,0]] += X[i,1]
+                self.__total_scores[X[i,0]-1] += X[i,1] #因为python索引是从0开始的，而电影ID从1开始，所以对应的电影ID先减去1
         else:
             #implicit feedback: 根据训练集求出所有电影的观看数之和
             for i in range(X.shape[0]):
-                self.__total_scores[X[i,0]] += 1
-        self.__most_popular_movie = np.argsort(-self.__total_scores)[:self.__K] #一个top-K推荐列表，越在前面(索引更小)的电影越受欢迎
+                self.__total_scores[X[i,0]-1] += 1
+        self.__most_popular_movie = np.argsort(-self.__total_scores)[:self.__K] + 1 #一个top-K推荐列表，越在前面(索引更小)的电影越受欢迎
+        print(self.__most_popular_movie)
         self.__topK[:,:] = self.__most_popular_movie
         return self.__topK   #返回所有用户各自的topK推荐列表

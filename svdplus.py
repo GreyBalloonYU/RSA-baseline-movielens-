@@ -1,5 +1,6 @@
 #svd++推荐算法
 import matplotlib.pyplot as plt
+from metric import hitK, ndcgK
 import numpy as np
 import pandas as pd
 class Svdplus:
@@ -16,13 +17,15 @@ class Svdplus:
     __usernums = 0  #用户数
     __itemnums = 0  #物品数
     __factor_nums = 0   #向量的因子数
+    __X_train = None
     def __init__(self, itemnums, usernums, K, factor_nums):
         self.__K = K
-        self.__bu = np.random.rand(usernums, )  #随机初始化
-        self.__bi = np.random.rand(itemnums, )
-        self.__p = np.random.rand(usernums, factor_nums)
-        self.__q = np.random.rand(itemnums, factor_nums)
-        self.__y = np.random.rand(itemnums, factor_nums)
+        #bu和bi和y初始化为0，p\q是均匀初始化(uniform)
+        self.__bu = np.zeros(usernums)  
+        self.__bi = np.zeros(itemnums)
+        self.__p = np.random.uniform(size=(usernums, factor_nums))
+        self.__q = np.random.uniform(size=(itemnums, factor_nums))
+        self.__y = np.zeros((itemnums, factor_nums))
         self.__topK = np.empty((usernums, K))
         self.__usernums = usernums
         self.__itemnums = itemnums
@@ -34,8 +37,9 @@ class Svdplus:
         plt.title("learning curve")
         plt.show()
     #接收一个训练集，这个训练集(dataframe)有三列组成，第一列是用户的ID，第二列是电影的ID，第三列是该用户对这个电影的评分，返回一个top-K推荐列表
+    #cv是交叉验证集
     #利用随机梯度下降
-    def fit(self, X, iters, alpha1, alpha2, lamda1, lamda2): 
+    def fit(self, X, cv, iters, alpha1, alpha2, lamda1, lamda2): 
         #先根据X来给nu赋值
         X.groupby('userid').apply(nugroupby, self.__nu)
         X_train = X.values  #转成ndarray
@@ -49,7 +53,11 @@ class Svdplus:
                 avgcost_1000 /= 1000
                 self.__learn[0].append(int(i / 1000))
                 self.__learn[1].append(avgcost_1000)
-                print("已迭代1000次! 平均cost:%f"%(avgcost_1000))
+                #交叉验证集
+                prediction = Svdplus.predict(self)
+                hit5 = hitK(prediction, cv)
+                ndcg5 = ndcgK(prediction, cv)
+                print("已迭代1000次! 训练集的MSE:%f，交叉验证集的hit@5:%f，ndcg@5:%f"%(avgcost_1000, hit5, ndcg5))
                 avgcost_1000 = 0
             j = i % m
             data = X_train[j, :]   #当前数据
@@ -75,25 +83,19 @@ class Svdplus:
                 self.__y[j, :] += alpha2 * (e * 1 / np.sqrt(len(nu)) * qi - lamda2 * self.__y[j, :])
     #给每个用户topk推荐，推荐的电影不包括该用户在训练集中观看的电影
     def predict(self):
-        #先算出每个用户未看过的电影ID
-        allitems = list(np.arange(self.__itemnums))
+        #先算出每个用户未看过的电影ID(不用算每个用户未看过的电影ID)
         for i in range(self.__usernums):
-            predictitems = np.array([var for var in allitems if var not in self.__nu[i]]) #用户未打分的物品ID集合
-            prediction = np.vstack((predictitems, np.empty(predictitems.shape[0], ))).T
+            prediction = np.empty((self.__itemnums, ))
             bu = self.__bu[i]   #该用户的偏置
             pu = self.__p[i]    #该用户的向量
             yj_sum = 1 / np.sqrt(len(self.__nu[i])) * np.sum(self.__y[self.__nu[i], :], axis=0)    #该用户所有隐式反馈商品的向量
             for j in range(prediction.shape[0]):    #开始预测
-                bi = self.__bi[int(prediction[j, 0])]   #物品的偏置
-                qi = self.__q[int(prediction[j, 0])] #物品的向量
-                prediction[j, 1] = self.__avgrating + bu + bi + np.matmul(qi, (pu + yj_sum).reshape(self.__factor_nums, 1)) #预测用户对该商品的评分
+                bi = self.__bi[j]   #物品的偏置
+                qi = self.__q[j] #物品的向量
+                prediction[j] = self.__avgrating + bu + bi + np.matmul(qi, (pu + yj_sum).reshape(self.__factor_nums, 1)) #预测用户对该商品的评分
             #预测完以后要对这些电影的评分的排序作一个降序排列，然后取前K个评分最高的电影作为该用户的topK推荐
-            tmp = pd.DataFrame(prediction, columns=['itemid', 'rating'])    #把ndarray转成dataframe
-            tmp.sort_values('rating', ascending=False, inplace=True)    #根据评分排序
-            self.__topK[i, :] = tmp.iloc[:self.__K, 0].values.astype(int)   #选出前K个评分最高的作为该用户的topK推荐
-            print("预测完用户%d的topk"%(i + 1))
+            self.__topK[i, :] = np.argsort(-prediction)[:self.__K] + 1  #选出前K个评分最高的作为该用户的topK推荐，加 1 是因为这里的ID是从0开始的
         return self.__topK
-
 def nugroupby(X, nu):
     nu.append(list(X.iloc[:, 1].values - 1))    #由于python索引是从0开始，所以对应物品在数组中的值是它的ID减去1
     return X
